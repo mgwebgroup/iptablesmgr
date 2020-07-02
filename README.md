@@ -15,19 +15,21 @@ Script will produce *ip_maliceous* file in *iptablesmgr* directory. The file is 
   
 New addresses in the *ip_maliceous* files will be added without duplication. In this way, you can have a pre-determined list of maliceous addresses to start. Also, if there are existing ip addresses in the IPGUARD chain, they will not be duplicated or erased. Everything is exported from the chain first, added to the maliceous list, deduped, and then re-imported back.  
 The only argument to the script is path to apache log file, which needs to have read permissions. Example:  
-
-    ./iptablesmgr /var/log/apache2/test_site-access.log
-
+```bash
+./iptablesmgr /var/log/apache2/test_site-access.log
+```
   
   
 ### Usage  
 ##### Check requests identified as maliceous.
 To fine-tune regular expressions for the legal paths, run the script with -i option. This option takes no arguments, and will stop the script after requests_maliceous file is generated. You can inspect it with:  
 ```bash  
-grep -rne LEGAL_PATH_IN_QUESTION iptablesmgr/requests_maliceous```  
-This way you can see if your LEGAL_PATH_IN_QUESTION has made it to the bad list.  
-```
-##### Run inside container:  
+grep -rne LEGAL_PATH_IN_QUESTION iptablesmgr/requests_maliceous
+```  
+This way you can see if your LEGAL_PATH_IN_QUESTION has made it to the maliceous list.  
+
+##### Run inside container:
+This example emphasizes use of Linux capabilities for the default root user inside the container. Without these capabilities, manipulations of iptables will not work.
 ```bash  
 docker run --rm -it --cap-add=NET_ADMIN --cap-add=SYS_ADMIN iptablesmgr:latest  
 ```
