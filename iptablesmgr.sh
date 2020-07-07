@@ -7,11 +7,12 @@ PATHS_POST=paths_post
 APP_DIR=iptablesmgr
 REQUESTS_MALICEOUS=requests_maliceous
 IP_MALICEOUS=ip_maliceous
+IP_LEGAL=ip_legal
 CHAIN=IPGUARD
 
 getopts 'i' INSPECT
 
-#TODO: include help option
+# TODO: include help option
 
 if [ $INSPECT == 'i' ]; then
   APACHE_LOG=$2
@@ -30,7 +31,7 @@ import_ip_maliceous () {
   touch  ${APP_DIR}/${IP_MALICEOUS}
   while read; do
     iptables -I $1 -p all -j DROP -s ${REPLY}
-    echo iptables -I $1 -p all -j DROP -s ${REPLY}
+    # echo iptables -I $1 -p all -j DROP -s ${REPLY}
   done < ${APP_DIR}/${IP_MALICEOUS}
 }
 
@@ -52,13 +53,18 @@ command -v iptables >/dev/null 2>&1 || { print_error "Please install iptables. A
 #fi
 
 
-if [ ! -f ${PATHS_GET} ]; then
+if [ ! -f ${APP_DIR}/${PATHS_GET} ]; then
   print_error 'File paths_get could not be found' 'It is needed to define legal application paths for GET requests'
   exit
 fi
 
-if [ ! -f ${PATHS_MALICEOUS} ]; then
-  touch ${PATHS_MALICEOUS}
+if [ ! -f ${APP_DIR}/${PATHS_POST} ]; then
+  print_error 'File paths_post could not be found' 'It is needed to define legal application paths for POST requests'
+  exit
+fi
+
+if [ ! -f ${APP_DIR}/${PATHS_MALICEOUS} ]; then
+  touch ${APP_DIR}/${PATHS_MALICEOUS}
 fi
 
 if [ -z ${APACHE_LOG} ]; then
@@ -71,17 +77,18 @@ if [ ! -f ${APACHE_LOG} ]; then
   exit 1
 fi
 
-# TODO: remove commented out lines from PATHS_GET
-FILTER_GET=''
+# Remove commented and empty lines
+FILTER_GET='/^#/d;s/^$//'
+sed -re ${FILTER_GET} ${APP_DIR}/${PATHS_GET} > ${APP_DIR}/temp
 while read; do
   FILTER_GET+="\-GET\s${REPLY}\s-d;"
-done < ${PATHS_GET}
+done < ${APP_DIR}/temp
 
-# TODO: remove commented out lines from PATHS_POST
-FILTER_POST=''
+FILTER_POST='/^#/d;s/^$//'
+sed -re ${FILTER_POST} ${APP_DIR}/${PATHS_POST} > ${APP_DIR}/temp
 while read; do
   FILTER_POST+="\-POST\s${REPLY}\s-d;"
-done < ${PATHS_POST}
+done < ${APP_DIR}/temp
 
 if [ ! -d ${APP_DIR} ]; then
   mkdir ${APP_DIR}
@@ -95,16 +102,28 @@ fi
 
 
 # EXECUTE
-# use sed and the created filter expressions for GET and POST requests  to remove legal paths, save the rest in assumed
-# maliceous requests
-sed -re $FILTER_GET $APACHE_LOG > ${APP_DIR}/${REQUESTS_MALICEOUS}
+# Remove legal ip addresses from Apache log first. They can have any path
+if [ -f ${APP_DIR}/${IP_LEGAL} ]; then
+  while read; do
+    sed -re "/^${REPLY}\s/d" ${APACHE_LOG} > ${APP_DIR}/${REQUESTS_MALICEOUS}
+  done < ${APP_DIR}/${IP_LEGAL}
+else
+  cp ${APACHE_LOG} ${APP_DIR}/${REQUESTS_MALICEOUS}
+fi
+
+# use sed and the created filter expressions for GET and POST requests  to remove legal paths, save the rest in assumed maliceous requests
+sed -i -re $FILTER_GET ${APP_DIR}/${REQUESTS_MALICEOUS}
 sed -i -re $FILTER_POST ${APP_DIR}/${REQUESTS_MALICEOUS}
 # Further nix lines which request root path "/"
 sed -i -e '\-GET\s/\sHTTP/1-d' ${APP_DIR}/${REQUESTS_MALICEOUS}
+# Nix lines that don't have request type in them. These are requests from local services to apache.
+sed -i -e '/"-"\s408/d' ${APP_DIR}/${REQUESTS_MALICEOUS}
 
 if [ $INSPECT == 'i' ]; then
+  echo '*** -------- ***'
   echo Please inspect the file ${APP_DIR}/${REQUESTS_MALICEOUS} for possible legal paths to be present
-  echo You can use grep -rne LEGAL_PATH_IN_QUESTION ${APP_DIR}/${REQUESTS_MALICEOUS}
+  echo 'You can use `grep -rne LEGAL_PATH_IN_QUESTION '${APP_DIR}/${REQUESTS_MALICEOUS}'`'
+  echo '*** COMPLETE ***'
   exit 0
 fi
 
@@ -113,7 +132,6 @@ cut -d ' ' -f1 ${APP_DIR}/${REQUESTS_MALICEOUS} | sort | uniq >> ${APP_DIR}/${IP
 dedup ${APP_DIR}/${IP_MALICEOUS}
 
 # Check if chain exists in IP tables. If not, create it
-# sudo su -
 iptables -S $CHAIN > /dev/null 2>&1
 if [ $? -gt 0 ]; then
   echo No chain $CHAIN. Will create.
@@ -128,5 +146,8 @@ else
   import_ip_maliceous $CHAIN
 fi
 
+# TODO in the list identify which IP addresses were new for this run
+echo '*** -------- ***'
 echo Your current chain $CHAIN has these rules now:
 iptables --line-numbers -v -nL $CHAIN
+echo '*** COMPLETE ***'
