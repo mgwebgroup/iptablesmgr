@@ -78,13 +78,13 @@ if [ ! -f ${APACHE_LOG} ]; then
 fi
 
 # Remove commented and empty lines
-FILTER_GET='/^#/d;s/^$//'
+FILTER_GET='/^#/d;/^$/d;'
 sed -re ${FILTER_GET} ${APP_DIR}/${PATHS_GET} > ${APP_DIR}/temp
 while read; do
   FILTER_GET+="\-GET\s${REPLY}\s-d;"
 done < ${APP_DIR}/temp
 
-FILTER_POST='/^#/d;s/^$//'
+FILTER_POST='/^#/d;/^$/d;'
 sed -re ${FILTER_POST} ${APP_DIR}/${PATHS_POST} > ${APP_DIR}/temp
 while read; do
   FILTER_POST+="\-POST\s${REPLY}\s-d;"
@@ -102,13 +102,14 @@ fi
 
 
 # EXECUTE
+cp ${APACHE_LOG} ${APP_DIR}/${REQUESTS_MALICEOUS}
+
 # Remove legal ip addresses from Apache log first. They can have any path
 if [ -f ${APP_DIR}/${IP_LEGAL} ]; then
   while read; do
-    sed -re "/^${REPLY}\s/d" ${APACHE_LOG} > ${APP_DIR}/${REQUESTS_MALICEOUS}
+    # echo ${REPLY}
+    sed -ire "/^${REPLY}\s/d" ${APP_DIR}/${REQUESTS_MALICEOUS}
   done < ${APP_DIR}/${IP_LEGAL}
-else
-  cp ${APACHE_LOG} ${APP_DIR}/${REQUESTS_MALICEOUS}
 fi
 
 # use sed and the created filter expressions for GET and POST requests  to remove legal paths, save the rest in assumed maliceous requests
