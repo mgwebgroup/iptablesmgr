@@ -21,15 +21,23 @@ The only argument to the script is path to apache log file, which needs to have 
   
   
 ### Usage  
-##### Check requests identified as maliceous.
-To fine-tune regular expressions for the legal paths, run the script with -i option. This option takes no arguments, and will stop the script after requests_maliceous file is generated. You can inspect it with:  
+#### Check requests identified as maliceous:
+To fine-tune regular expressions for the legal paths, run the script with -i option. The option takes no arguments and will stop the script after *requests_maliceous* file is generated. You can inspect it with:  
 ```bash  
 grep -rne LEGAL_PATH_IN_QUESTION iptablesmgr/requests_maliceous
 ```  
 This way you can see if your LEGAL_PATH_IN_QUESTION has made it to the maliceous list.  
 
-##### Run inside container:
+#### Run inside container:
 This example emphasizes use of Linux capabilities for the default root user inside the container. Without these capabilities, manipulations of iptables will not work.
 ```bash  
 docker run --rm -it --cap-add=NET_ADMIN --cap-add=SYS_ADMIN iptablesmgr:latest  
+```
+
+#### Process Apache log archives:
+If you have several logs archived in apache directory, you can do the following:
+```bash
+cp /var/log/apache2/access_log-*.gz .
+for FILE in access_log-*.gz; do gzip -d $FILE; done
+for FILE in access_log*; do sudo ./iptablesmgr.sh $FILE; done
 ```
