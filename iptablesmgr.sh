@@ -28,11 +28,10 @@ print_error () {
 
 import_ip_maliceous () {
   echo Importing rules...
-  touch  ${APP_DIR}/${IP_MALICEOUS}
   while read; do
     iptables -I $1 -p all -j DROP -s ${REPLY}
     # echo iptables -I $1 -p all -j DROP -s ${REPLY}
-  done < ${APP_DIR}/${IP_MALICEOUS}
+  done < $2
 }
 
 dedup () {
@@ -108,7 +107,7 @@ cp ${APACHE_LOG} ${APP_DIR}/${REQUESTS_MALICEOUS}
 if [ -f ${APP_DIR}/${IP_LEGAL} ]; then
   while read; do
     # echo ${REPLY}
-    sed -ire "/^${REPLY}\s/d" ${APP_DIR}/${REQUESTS_MALICEOUS}
+    sed -i -re "/^${REPLY}\s/d" ${APP_DIR}/${REQUESTS_MALICEOUS}
   done < ${APP_DIR}/${IP_LEGAL}
 fi
 
@@ -137,18 +136,29 @@ iptables -S $CHAIN > /dev/null 2>&1
 if [ $? -gt 0 ]; then
   echo No chain $CHAIN. Will create.
   iptables -N $CHAIN
-  import_ip_maliceous $CHAIN
   iptables -I INPUT 1 -j $CHAIN
 else
   echo Found chain $CHAIN
-  iptables -S $CHAIN | sed -e '1d' | cut -d ' ' -f4 | sed -e 's/\/32//g' | sort | uniq >> ${APP_DIR}/${IP_MALICEOUS}
-  dedup ${APP_DIR}/${IP_MALICEOUS}
-  iptables -F $CHAIN
-  import_ip_maliceous $CHAIN
 fi
+iptables -S $CHAIN | sed -e '1d' | cut -d ' ' -f4 | sed -e 's/\/32//g' | sort | uniq > ${APP_DIR}/temp
 
-# TODO in the list identify which IP addresses were new for this run
+#make list of new ip addresses for this run
+sdiff -sW ${APP_DIR}/temp ${APP_DIR}/${IP_MALICEOUS} | sed -re 's/^[ \t>]+//' > ${APP_DIR}/new
+import_ip_maliceous $CHAIN ${APP_DIR}/new
+
+# In the list identify which IP addresses were new for this run
+iptables --line-numbers -v -nL $CHAIN | tr '*' 'x' > ${APP_DIR}/temp
 echo '*** -------- ***'
-echo Your current chain $CHAIN has these rules now:
-iptables --line-numbers -v -nL $CHAIN
+echo Chain $CHAIN has these rules now:
+while read NUM PKTS BYTES TARGET PROT OPT IN OUT SOURCE DESTINATION; do
+  cat ${APP_DIR}/new | grep -e $SOURCE >/dev/null 2>&1
+  if [ $? == 0 ]; then
+    NEW=new;
+  else
+    NEW='';
+  fi
+  printf "%6s %4s %5s %-10s %4s %3s %6s %6s %-20s %-17s %-6s\n" $NUM $PKTS $BYTES $TARGET $PROT $OPT $IN $OUT $SOURCE $DESTINATION $NEW
+done < ${APP_DIR}/temp
 echo '*** COMPLETE ***'
+
+rm ${APP_DIR}/temp
