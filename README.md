@@ -24,11 +24,12 @@ The only argument to the script is path to apache log file, which needs to have 
   
 ### Usage  
 #### Check requests identified as maliceous:
-To fine-tune regular expressions for the legal paths, run the script with -i option. The option takes no arguments and will stop the script after *requests_maliceous* file is generated. You can inspect it with:  
+To fine-tune regular expressions for the legal paths, run the script with -i option. The option takes no arguments and will stop the script after *requests_maliceous* file is generated. You can inspect it with grep:  
 ```bash  
+sudo ./iptablesmgr.sh -i access.log
 grep -rne LEGAL_PATH_IN_QUESTION iptablesmgr/requests_maliceous
 ```  
-This way you can see if your LEGAL_PATH_IN_QUESTION has made it to the maliceous list.  
+This way you can see if your LEGAL_PATH_IN_QUESTION together with its associated IP address has made it to the maliceous list.  
 
 #### Run inside container:
 This example emphasizes use of Linux capabilities for the default root user inside the container. Without these capabilities, manipulations of iptables will not work.
